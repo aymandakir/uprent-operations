@@ -3,6 +3,8 @@
  * Service for AI-powered scraper health analysis
  */
 
+import 'dotenv/config';
+
 import express from 'express';
 import cors from 'cors';
 import { healScraper } from './heal-scraper';

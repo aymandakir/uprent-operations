@@ -13,6 +13,7 @@
     "@supabase/supabase-js": "^2.39.0",
     "@uprent/database": "*",
     "@uprent/shared": "*",
+    "dotenv": "^16.3.1",
     "openai": "^4.24.1"
   },
   "devDependencies": {

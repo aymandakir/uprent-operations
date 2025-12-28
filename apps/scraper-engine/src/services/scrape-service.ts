@@ -21,14 +21,24 @@ export class ScrapeService {
    * @returns Array of platform monitors
    */
   async getActiveMonitors(): Promise<PlatformMonitor[]> {
+    console.log('🔍 Fetching active monitors from database...');
+    console.log('📊 Supabase client initialized:', !!supabase);
+    console.log('📋 Table name:', TABLES.PLATFORM_MONITORS);
+
     const { data, error } = await supabase
       .from(TABLES.PLATFORM_MONITORS)
       .select('*')
       .eq('status', 'active');
 
     if (error) {
-      console.error('Error fetching monitors:', error);
+      console.error('❌ Error fetching monitors:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
       throw error;
+    }
+
+    console.log('✅ Monitors found:', data?.length || 0);
+    if (data && data.length > 0) {
+      console.log('📝 Monitor names:', data.map(m => m.name).join(', '));
     }
 
     return data || [];
@@ -40,6 +50,8 @@ export class ScrapeService {
    * @returns Scrape log entry
    */
   async executeScrape(monitor: PlatformMonitor): Promise<ScrapeLog> {
+    console.log(`🕷️  Scraping ${monitor.name} (${monitor.url})...`);
+    
     const result = await this.scraper.scrape(
       monitor.url,
       monitor.selector,
@@ -51,7 +63,14 @@ export class ScrapeService {
       }
     );
 
+    console.log(`📊 Scrape result for ${monitor.name}:`, {
+      success: result.success,
+      listingsFound: result.listingsFound,
+      responseTime: result.responseTime
+    });
+
     // Save scrape log to database
+    console.log(`💾 Saving scrape log to database for ${monitor.name}...`);
     const { data, error } = await supabase
       .from(TABLES.SCRAPE_LOGS)
       .insert({
@@ -66,9 +85,12 @@ export class ScrapeService {
       .single();
 
     if (error) {
-      console.error('Error saving scrape log:', error);
+      console.error(`❌ Error saving scrape log for ${monitor.name}:`, error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
       throw error;
     }
+
+    console.log(`✅ Scrape log saved for ${monitor.name} with ID:`, data?.id);
 
     // Check if alert should be created
     await this.checkAndCreateAlerts(monitor, result);

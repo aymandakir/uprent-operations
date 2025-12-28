@@ -27,7 +27,7 @@ export class BaseScraper {
   }
 
   /**
-   * Scrape a URL using ScrapingBee API
+   * Scrape a URL using ScrapingBee API with fallback to direct axios
    * @param url - URL to scrape
    * @param selector - CSS selector to find listings
    * @param options - Scraping options
@@ -37,23 +37,38 @@ export class BaseScraper {
     const startTime = Date.now();
     
     try {
-      // Use ScrapingBee API for reliable scraping
-      const response = await axios.get('https://app.scrapingbee.com/api/v1/', {
-        params: {
-          api_key: this.apiKey,
-          url: url,
-          render_js: 'true',
-          wait: options.waitForSelector ? 3000 : 0,
-          wait_for: options.waitForSelector || undefined,
-          timeout: options.timeout || 30000
-        },
-        headers: options.headers || {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        },
-        timeout: (options.timeout || 30000) + 5000
-      });
+      let html: string;
+      
+      // Try ScrapingBee first if API key is available
+      if (this.apiKey) {
+        try {
+          console.log(`🌐 Using ScrapingBee for ${url}...`);
+          const response = await axios.get('https://app.scrapingbee.com/api/v1/', {
+            params: {
+              api_key: this.apiKey,
+              url: url,
+              render_js: 'true',
+              wait: options.waitForSelector ? 3000 : 0,
+              wait_for: options.waitForSelector || undefined,
+              timeout: options.timeout || 30000
+            },
+            headers: options.headers || {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            },
+            timeout: (options.timeout || 30000) + 5000
+          });
+          html = response.data;
+        } catch (scrapingBeeError) {
+          console.warn(`⚠️  ScrapingBee failed, falling back to direct request: ${scrapingBeeError instanceof Error ? scrapingBeeError.message : String(scrapingBeeError)}`);
+          // Fallback to direct axios request
+          html = await this.fetchDirect(url, options);
+        }
+      } else {
+        // No API key, use direct request
+        console.log(`🌐 Using direct request for ${url} (no ScrapingBee key)...`);
+        html = await this.fetchDirect(url, options);
+      }
 
-      const html = response.data;
       const htmlHash = hashHtml(html);
       const $ = cheerio.load(html);
       
@@ -62,6 +77,8 @@ export class BaseScraper {
       const listingsFound = listings.length;
 
       const responseTime = Date.now() - startTime;
+
+      console.log(`📊 Found ${listingsFound} listings using selector: ${selector}`);
 
       return {
         success: true,
@@ -74,7 +91,7 @@ export class BaseScraper {
       const responseTime = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       
-      console.error(`Scraping failed for ${url}:`, errorMessage);
+      console.error(`❌ Scraping failed for ${url}:`, errorMessage);
       
       return {
         success: false,
@@ -85,6 +102,27 @@ export class BaseScraper {
         timestamp: new Date().toISOString()
       };
     }
+  }
+
+  /**
+   * Fetch HTML directly using axios (fallback method)
+   * @param url - URL to fetch
+   * @param options - Scraping options
+   * @returns HTML content
+   */
+  private async fetchDirect(url: string, options: ScrapeOptions = {}): Promise<string> {
+    const response = await axios.get(url, {
+      headers: options.headers || {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
+      },
+      timeout: options.timeout || 30000
+    });
+    return response.data;
   }
 }
 

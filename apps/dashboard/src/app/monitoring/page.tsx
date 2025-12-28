@@ -15,10 +15,11 @@ export default function MonitoringPage() {
   const [logs, setLogs] = useState<ScrapeLog[]>([]);
   const [alerts, setAlerts] = useState<PlatformAlert[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!supabaseUrl || !supabaseKey) {
-      console.error('Missing Supabase credentials');
+      setError('Missing Supabase credentials. Please configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your .env.local file.');
       setLoading(false);
       return;
     }
@@ -96,6 +97,32 @@ export default function MonitoringPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-xl">Loading...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertTriangle className="w-8 h-8 text-red-600" />
+              <h1 className="text-2xl font-bold text-red-900">Configuration Required</h1>
+            </div>
+            <p className="text-red-800 mb-4">{error}</p>
+            <div className="bg-white rounded p-4 mb-4">
+              <p className="text-sm font-semibold mb-2">Create a <code className="bg-gray-100 px-2 py-1 rounded">.env.local</code> file in the <code className="bg-gray-100 px-2 py-1 rounded">apps/dashboard</code> directory with:</p>
+              <pre className="bg-gray-900 text-green-400 p-4 rounded text-sm overflow-x-auto">
+{`NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key`}
+              </pre>
+            </div>
+            <p className="text-sm text-red-700">
+              After adding the environment variables, restart your Next.js development server.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }

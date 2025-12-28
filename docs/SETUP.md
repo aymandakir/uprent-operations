@@ -61,11 +61,19 @@ npm install
    SLACK_WEBHOOK_URL=your-slack-webhook
    ```
 
-3. **For the dashboard**, create `.env.local`:
+3. **For the dashboard** (required for the monitoring UI), create `.env.local` in `apps/dashboard/`:
+   ```bash
+   cd apps/dashboard
+   cp .env.local.example .env.local
+   ```
+   
+   Then fill in your Supabase credentials:
    ```env
    NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
    ```
+   
+   **Important**: The dashboard requires `NEXT_PUBLIC_` prefixed variables to access them in the browser. After creating this file, restart your Next.js dev server.
 
 ### 4. Initialize Platform Monitors
 
@@ -155,9 +163,12 @@ curl -X POST http://localhost:3001/api/scrape/all
 
 ### Common Issues
 
-1. **"Missing Supabase environment variables"**
-   - Ensure `.env` file exists and contains all required variables
-   - For dashboard, also check `.env.local`
+1. **"Missing Supabase credentials" error in dashboard**
+   - This error appears when `NEXT_PUBLIC_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` are not set
+   - Create `apps/dashboard/.env.local` file (copy from `.env.local.example`)
+   - Add your Supabase credentials with `NEXT_PUBLIC_` prefix
+   - **Restart your Next.js dev server** after creating/updating `.env.local`
+   - For other services, ensure `.env` file exists in the root directory
 
 2. **"Monitor not found"**
    - Make sure you've added platform monitors to the database

@@ -6,6 +6,11 @@ import type { ScraperConfig } from '@uprent/shared';
 
 /**
  * Configuration for Funda.nl rental listings
+ * Updated 2025: Funda now uses data-test-id attributes for listing cards
+ * Alternative selectors if this doesn't work:
+ * - '.search-result'
+ * - '.object-list-item'
+ * - 'li[data-test-id*="search"]'
  */
 export const fundaConfig: ScraperConfig = {
   name: 'Funda',
