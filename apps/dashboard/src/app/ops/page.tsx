@@ -31,8 +31,8 @@ interface GapReport {
   totalNewListings24h: number;
   gapListings24h: number;
   gapPercentage: number;
-  topGapPlatforms: Array<{ platformType: string; count: number }>;
-  sampleGapListings: Array<{
+  topGapPlatforms?: Array<{ platformType: string; count: number }>;
+  sampleGapListings?: Array<{
     id: string;
     title: string | null;
     price: number | null;
@@ -183,18 +183,18 @@ export default function OpsPage() {
             <div className="mb-4">
               <div className="text-sm font-semibold mb-2 text-white">Top gap sources:</div>
               <div className="flex flex-wrap gap-2">
-                {gapReport.topGapPlatforms.slice(0, 5).map((platform) => (
+                {(gapReport.topGapPlatforms || []).slice(0, 5).map((platform) => (
                   <span key={platform.platformType} className="bg-gray-700 text-white px-3 py-1 rounded text-sm border border-gray-600">
                     {platform.platformType}: {platform.count}
                   </span>
                 ))}
               </div>
             </div>
-            {gapReport.sampleGapListings.length > 0 && (
+            {(gapReport.sampleGapListings || []).length > 0 && (
               <div>
                 <div className="text-sm font-semibold mb-2 text-white">Sample missed listings:</div>
                 <div className="space-y-2">
-                  {gapReport.sampleGapListings.map((listing) => (
+                  {(gapReport.sampleGapListings || []).map((listing) => (
                     <div
                       key={listing.id}
                       className="bg-gray-700 border border-gray-600 p-3 rounded flex items-center justify-between"
