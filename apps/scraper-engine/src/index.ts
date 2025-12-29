@@ -206,43 +206,235 @@ app.post('/api/test-selector', async (req, res) => {
     
     console.log(`📊 Found ${count} elements with selector "${selector}"`);
     
-    // Also try to find what selectors exist
-    const possibleSelectors = [
-      '[data-test-id="search-result-item"]',
-      '.search-result',
-      '.object-list-item',
-      'li[class*="search"]',
-      'div[class*="listing"]',
-      'li[data-test-id*="search"]',
-      '[data-test-id*="result"]',
-      '.object-list-item',
-      'article[class*="search"]',
-      'div[data-test-id]'
-    ];
-    
-    const results = possibleSelectors.map(sel => ({
+    // Test the provided selector (may be comma-separated)
+    const selectors = selector.split(',').map((s: string) => s.trim());
+    const testedResults = selectors.map((sel: string) => ({
       selector: sel,
-      count: $(sel).length
+      count: $(sel).length,
+      sampleHtml: $(sel).first().html()?.substring(0, 300) || null
     }));
     
-    // Find the best selector (one with most matches)
-    const bestSelector = results.reduce((best, current) => 
+    const bestTested = testedResults.reduce((best: { selector: string; count: number; sampleHtml: string | null }, current: { selector: string; count: number; sampleHtml: string | null }) => 
       current.count > best.count ? current : best
-    , { selector: '', count: 0 });
+    , { selector: '', count: 0, sampleHtml: null });
     
-    console.log(`✅ Best selector found: "${bestSelector.selector}" with ${bestSelector.count} matches`);
+    // Also try common selectors for rental platforms
+    const commonSelectors = [
+      // Funda patterns
+      '[data-test-id="search-result-item"]',
+      '[data-test-id*="search-result"]',
+      '.search-result',
+      '.object-list-item',
+      'li[class*="search-result"]',
+      'div[class*="search-result"]',
+      // Pararius patterns
+      '.listing-search-item',
+      '.property-list-item',
+      'li[class*="listing"]',
+      'section[class*="property"]',
+      '[data-testid*="listing"]',
+      // Kamernet patterns
+      '.listing-item',
+      '.room-card',
+      'div[class*="listing"]',
+      'div[class*="room"]',
+      '[data-testid*="listing"]',
+      '[data-testid*="room"]',
+      // Generic patterns
+      'article[class*="listing"]',
+      'div[data-test-id]',
+      '[class*="result"]',
+      '[class*="item"]'
+    ];
+    
+    const alternativeResults = commonSelectors.map((sel: string) => ({
+      selector: sel,
+      count: $(sel).length
+    })).filter((r: { selector: string; count: number }) => r.count > 0); // Only show selectors that found something
+    
+    // Sort by count descending
+    alternativeResults.sort((a: { selector: string; count: number }, b: { selector: string; count: number }) => b.count - a.count);
+    
+    // Find the best overall selector
+    const bestOverall: { selector: string; count: number } = alternativeResults.length > 0 && alternativeResults[0]
+      ? alternativeResults[0] 
+      : { selector: 'none', count: 0 };
+    
+    console.log(`📊 Tested selector "${selector}": ${bestTested.count} matches`);
+    console.log(`✅ Best alternative: "${bestOverall.selector}" with ${bestOverall.count} matches`);
     
     res.json({ 
       tested: selector,
-      count,
-      alternatives: results,
-      bestSelector: bestSelector.count > 0 ? bestSelector : null,
+      testedResults,
+      bestTested: bestTested.count > 0 ? bestTested : null,
+      alternatives: alternativeResults.slice(0, 10), // Top 10
+      bestOverall: bestOverall.count > 0 ? bestOverall : null,
       htmlLength: response.data.length,
-      sampleHtml: count > 0 ? $(selector).first().html()?.substring(0, 200) : null
+      recommendation: bestOverall.count > bestTested.count 
+        ? `Use "${bestOverall.selector}" instead (found ${bestOverall.count} vs ${bestTested.count})`
+        : bestTested.count > 0 
+          ? `Current selector works (${bestTested.count} matches)`
+          : 'No listings found - selector may be broken'
     });
   } catch (error) {
     console.error('❌ Test selector error:', error);
     res.status(500).json({ 
+      error: String(error),
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * Competitor Analysis Endpoint
+ * Scrapes real platforms, UPRENT scraper, and HuurScout simultaneously
+ */
+app.post('/api/competitor-analysis/:city', async (req, res) => {
+  try {
+    const { city } = req.params;
+    const cityLower = city.toLowerCase();
+    
+    console.log(`🔍 [COMPETITOR] Starting analysis for ${city}...`);
+    
+    // Helper function to scrape a URL with a selector
+    const scrapeUrl = async (url: string, selector: string, name: string) => {
+      try {
+        const response = await axios.get(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'nl-NL,nl;q=0.9,en;q=0.8'
+          },
+          timeout: 45000
+        });
+        
+        const $ = cheerio.load(response.data);
+        const selectors = selector.split(',').map((s: string) => s.trim());
+        
+        let maxCount = 0;
+        for (const sel of selectors) {
+          const count = $(sel).length;
+          if (count > maxCount) {
+            maxCount = count;
+          }
+        }
+        
+        console.log(`✅ [COMPETITOR] ${name}: ${maxCount} listings`);
+        return { count: maxCount, success: true };
+      } catch (error) {
+        console.error(`❌ [COMPETITOR] ${name} failed:`, error);
+        return { count: 0, success: false, error: String(error) };
+      }
+    };
+    
+    // Get city-specific URLs
+    const cityUrls: Record<string, { pararius: string; funda: string; huurscout: string }> = {
+      amsterdam: {
+        pararius: 'https://www.pararius.com/apartments/amsterdam',
+        funda: 'https://www.funda.nl/huur/amsterdam/',
+        huurscout: 'https://huurscout.nl/amsterdam'
+      },
+      rotterdam: {
+        pararius: 'https://www.pararius.com/apartments/rotterdam',
+        funda: 'https://www.funda.nl/huur/rotterdam/',
+        huurscout: 'https://huurscout.nl/rotterdam'
+      },
+      utrecht: {
+        pararius: 'https://www.pararius.com/apartments/utrecht',
+        funda: 'https://www.funda.nl/huur/utrecht/',
+        huurscout: 'https://huurscout.nl/utrecht'
+      }
+    };
+    
+    const urls = cityUrls[cityLower] || cityUrls.amsterdam;
+    
+    if (!urls) {
+      return res.status(400).json({
+        error: `City "${city}" not supported. Supported cities: amsterdam, rotterdam, utrecht`
+      });
+    }
+    
+    // 1. Scrape REAL platforms (Pararius + Funda)
+    const [parariusReal, fundaReal] = await Promise.all([
+      scrapeUrl(
+        urls.pararius,
+        '.listing-search-item, .property-list-item, li[class*="listing"], section[class*="property"]',
+        'Pararius (REAL)'
+      ),
+      scrapeUrl(
+        urls.funda,
+        '.search-result, [data-test-id*="search-result"], [data-test-id="search-result-item"]',
+        'Funda (REAL)'
+      )
+    ]);
+    
+    const realListings = parariusReal.count + fundaReal.count;
+    
+    // 2. Get UPRENT scraper results from database (latest scrape for city platforms)
+    const { data: uprentMonitors } = await supabase
+      .from('platform_monitors')
+      .select('id, name')
+      .or(`name.ilike.%${city}%,name.ilike.%${cityLower}%`)
+      .eq('status', 'active');
+    
+    let uprentCoverage = 0;
+    if (uprentMonitors && uprentMonitors.length > 0) {
+      const uprentScrapes = await Promise.all(
+        uprentMonitors.map(async (monitor) => {
+          const { data: latestScrape } = await supabase
+            .from('scrape_logs')
+            .select('listings_found')
+            .eq('platform_id', monitor.id)
+            .eq('success', true)
+            .order('started_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          return latestScrape?.listings_found || 0;
+        })
+      );
+      uprentCoverage = uprentScrapes.reduce((sum, count) => sum + count, 0);
+    }
+    
+    // 3. Scrape HuurScout (competitor)
+    const huurscoutResult = await scrapeUrl(
+      urls.huurscout,
+      '.listing-item, .property-card, div[class*="listing"], article[class*="listing"]',
+      'HuurScout (COMPETITOR)'
+    );
+    
+    const huurscoutCoverage = huurscoutResult.count;
+    
+    // Calculate percentages
+    const uprentPercent = realListings > 0 ? Math.round((uprentCoverage / realListings) * 100 * 10) / 10 : 0;
+    const huurscoutPercent = realListings > 0 ? Math.round((huurscoutCoverage / realListings) * 100 * 10) / 10 : 0;
+    
+    // Determine winner
+    const uprentAdvantage = uprentCoverage > huurscoutCoverage;
+    const status = uprentAdvantage ? 'DOMINATE' : uprentCoverage === huurscoutCoverage ? 'PRICE_WAR' : 'BEHIND';
+    
+    const result = {
+      city: cityLower,
+      realListings,
+      platforms: {
+        pararius: parariusReal.count,
+        funda: fundaReal.count
+      },
+      uprentCoverage,
+      uprentPercent,
+      huurscoutCoverage,
+      huurscoutPercent,
+      uprentAdvantage,
+      status,
+      gap: Math.abs(uprentCoverage - huurscoutCoverage),
+      gapPercent: Math.round((Math.abs(uprentCoverage - huurscoutCoverage) / Math.max(uprentCoverage, huurscoutCoverage, 1)) * 100 * 10) / 10
+    };
+    
+    console.log(`📊 [COMPETITOR] ${city}: UPRENT ${uprentCoverage} (${uprentPercent}%) vs HuurScout ${huurscoutCoverage} (${huurscoutPercent}%) - ${status}`);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('❌ [COMPETITOR] Error:', error);
+    res.status(500).json({
       error: String(error),
       message: error instanceof Error ? error.message : 'Unknown error'
     });

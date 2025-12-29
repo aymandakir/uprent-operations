@@ -72,13 +72,33 @@ export class BaseScraper {
       const htmlHash = hashHtml(html);
       const $ = cheerio.load(html);
       
-      // Count listings using the selector
-      const listings = $(selector);
-      const listingsFound = listings.length;
+      // Try multiple selectors if the main one fails (comma-separated selectors)
+      const selectors = selector.split(',').map(s => s.trim());
+      let listingsFound = 0;
+      let workingSelector = selector;
+      
+      for (const sel of selectors) {
+        const listings = $(sel);
+        const count = listings.length;
+        console.log(`🔍 Testing selector "${sel}": ${count} listings found`);
+        
+        if (count > listingsFound) {
+          listingsFound = count;
+          workingSelector = sel;
+        }
+        
+        // If we found a good number of listings, use this selector
+        if (count >= 10) {
+          workingSelector = sel;
+          listingsFound = count;
+          console.log(`✅ Using selector "${sel}" with ${count} listings`);
+          break;
+        }
+      }
 
       const responseTime = Date.now() - startTime;
 
-      console.log(`📊 Found ${listingsFound} listings using selector: ${selector}`);
+      console.log(`📊 Final: Found ${listingsFound} listings using selector: ${workingSelector}`);
 
       return {
         success: true,

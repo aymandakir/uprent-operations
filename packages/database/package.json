@@ -4,13 +4,19 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
-    "@uprent/shared": "*"
+    "@uprent/shared": "*",
+    "drizzle-orm": "^0.29.0",
+    "postgres": "^3.4.3"
   },
   "devDependencies": {
+    "drizzle-kit": "^0.20.6",
     "typescript": "^5.3.3"
   }
 }
